@@ -57,6 +57,7 @@
                                        <div id="action-menu" class="hidden absolute right-0 mb-2 bottom-full w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
                                            <button id="activate-valorant" class="w-full text-left text-white px-4 py-2 hover:bg-slate-700">Ativar Chat VLR</button>
                                            <button id="leave-valorant" class="w-full text-left px-4 text-white py-2 hover:bg-slate-700">Sair</button>
+                                           <button id="professor-gone" class="w-full text-left px-4 text-white py-2 hover:bg-slate-700">O Professor foi embora</button>
                                        </div>
                                    </div>
 
@@ -204,8 +205,9 @@
         // Action menu: toggle and handlers for Valorant/Leave
         const actionBtn = document.getElementById('action-btn');
         const actionMenu = document.getElementById('action-menu');
-        const activateBtn = document.getElementById('activate-valorant');
-        const leaveBtn = document.getElementById('leave-valorant');
+    const activateBtn = document.getElementById('activate-valorant');
+    const leaveBtn = document.getElementById('leave-valorant');
+    const professorGoneBtn = document.getElementById('professor-gone');
 
         actionBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -232,6 +234,15 @@
             actionMenu.classList.add('hidden');
             socket.emit('message', 'sair');
             appendMessage('Saindo do modo Valorant...', 'user');
+            setStreaming(true);
+        });
+
+        professorGoneBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            actionMenu.classList.add('hidden');
+            // envia a frase exata que desativa o modo Professor no servidor
+            socket.emit('message', 'O Professor foi embora');
+            appendMessage('O Professor foi embora', 'user');
             setStreaming(true);
         });
     </script>

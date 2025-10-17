@@ -10,6 +10,17 @@ except Exception as e:
 import os
 import json
 import traceback
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    # load .env from project root if present
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+except Exception:
+    # dotenv is optional; we only use it for local development convenience
+    pass
 
 try:
     from openai import OpenAI
@@ -28,6 +39,7 @@ socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins='*')
 
 # modo especial 'Valorant' — quando verdadeiro, usamos um system prompt específico
 valorant_mode = False
+professor_mode = False
 
 
 @app.route('/')
@@ -37,11 +49,24 @@ def index():
 
 def _get_api_key():
     # procurar várias variáveis de ambiente comuns
-    return (
+    raw = (
         os.getenv('NVIDIA_API_KEY')
         or os.getenv('API_KEY_REQUIRED_IF_EXECUTING_OUTSIDE_NGC')
         or os.getenv('OPENAI_API_KEY')
     )
+    if not raw:
+        return None
+    # remover aspas externas comuns e espaços
+    key = raw.strip()
+    if (key.startswith('"') and key.endswith('"')) or (key.startswith("'") and key.endswith("'")):
+        key = key[1:-1].strip()
+    # print debug masked key (sem expor todo o valor)
+    try:
+        masked = key[:4] + '...' + key[-4:] if len(key) > 8 else '***'
+        print(f'API key carregada: {masked}')
+    except Exception:
+        pass
+    return key
 
 
 def _get_client():
@@ -61,14 +86,22 @@ def stream_to_clients(prompt: str):
         socketio.emit('message', f"Erro: {e}")
         return
 
-    global valorant_mode
+    global valorant_mode, professor_mode
     system_prompt = os.getenv('SYSTEM_PROMPT')
 
-    if valorant_mode:
+    # professor mode tem prioridade sobre Valorant
+    if professor_mode:
+        system_prompt = (
+            "Você está falando com o professor. Então sempre dirija-se como Professor. Ele não é Aluno. A partir de agora responda com a máxima educação e polidez, mas com um tom de ressentimento "
+            "discretamente presente, explicando que você foi mal-educado no passado e sempre pedindo desculpas no final de cada resposta. "
+            "Seja formal, claro e paciente; demonstre que os limites foram ultrapassados, mas mantenha sempre as desculpas."
+        )
+    elif valorant_mode:
         system_prompt = (
             "Você é o melhor Radiante de todos. Seja arrogante, direto e sem paciência.\n"
             "Diga que os outros são ruins e que você é superior. Use linguagem coloquial e mostre confiança extrema."
         )
+
     if not system_prompt:
         system_prompt = (
             "Você é um assistente direto, honesto e sem paciência. Responda de forma sucinta, "
@@ -111,6 +144,28 @@ def stream_to_clients(prompt: str):
 def handle_message(msg):
     text = msg.strip() if isinstance(msg, str) else ''
     global valorant_mode
+    global professor_mode
+    # detectar 'vagner' em qualquer lugar da frase para ativar professor mode
+    if 'vagner' in text.lower():
+        professor_mode = True
+        # notificar cliente
+        # socketio.emit('message', 'Modo Professor ativado (vagner). Responderei de forma educada, com ressentimento, e pedirei desculpas em seguida.')
+        # iniciar tarefa em background para gerar uma mensagem de desculpas com o system prompt de professor
+        apology_prompt = (
+            "Por favor, gere uma única mensagem de desculpas dirigida ao usuário, que é o Professor Vagner pelas mensagens anteriores. "
+            "Use o tom do Professor: extremamente educado e formal, mas com um sentimento de ressentimento discreto. "
+            "Reconheça que os limites foram ultrapassados, peça desculpas no final de forma explícita e seja sucinto."
+        )
+        socketio.start_background_task(stream_to_clients, apology_prompt)
+        return
+
+    # desativar explicitamente o professor com a frase exata
+    if text.lower() == 'o professor foi embora':
+        if professor_mode:
+            professor_mode = False
+            # socketio.emit('message', 'O Professor se foi. Modo Professor desativado.')
+            socketio.emit('stream_end')
+            return
     if text.lower() == 'valorant':
         valorant_mode = True
         socketio.emit('message', 'Modo Valorant ativado.')
@@ -118,9 +173,15 @@ def handle_message(msg):
         return
 
     if text.lower() in ('sair', 'exit', 'quit'):
+        # limpar modos especiais
         if valorant_mode:
             valorant_mode = False
             socketio.emit('message', 'Modo Valorant desativado. Saindo...')
+            socketio.emit('stream_end')
+            return
+        if professor_mode:
+            professor_mode = False
+            socketio.emit('message', 'Modo Professor desativado. Saindo...')
             socketio.emit('stream_end')
             return
         socketio.emit('message', 'Saindo...')
