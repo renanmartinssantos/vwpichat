@@ -5,18 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Chat IA Flask em tempo real</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <!-- Tailwind via CDN (for development) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* garantir que o background preencha toda a tela */
         html, body { height: 100%; }
-        /* fixar o background para evitar 'brancos' ao rolar */
         body { background-attachment: fixed; }
-        /* Estilizar a scrollbar do chat */
         #messages::-webkit-scrollbar { width: 10px; }
         #messages::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 10px; }
         #messages::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.6); border-radius: 10px; }
-        /* Firefox */
         #messages { scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.6) rgba(255,255,255,0.02); }
     </style>
 </head>
@@ -43,13 +38,11 @@
                 </div>
             </div>
 
-            <!-- input fixo tipo WhatsApp em telas pequenas (mobile-first) -->
             <div id="input-bar" class="fixed bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-950/90 backdrop-blur-md" style="padding-bottom: env(safe-area-inset-bottom);">
                 <div class="max-w-3xl mx-auto">
                     <form id="chat-form" class="flex gap-3 pb-3 items-end">
                         <textarea id="user-input" rows="1" autocomplete="off" placeholder="Digite sua mensagem..." required class="flex-1 resize-none bg-slate-900 border border-slate-700 rounded-full px-4 py-3 text-slate-100 placeholder:text-slate-500 h-16 max-h-56"></textarea>
                                <div class="flex items-center gap-3">
-                                   <!-- action menu button -->
                                    <div class="relative">
                                        <button id="action-btn" type="button" class="bg-slate-700 hover:bg-slate-600 text-white w-10 h-10 rounded-full flex items-center justify-center" aria-expanded="false" aria-haspopup="true">
                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -62,7 +55,6 @@
                                    </div>
 
                                    <button id="send-btn" type="submit" class="flex items-center justify-center bg-violet-600 hover:bg-violet-500 text-white font-semibold w-14 h-14 rounded-full">
-                                       <!-- ícone de enviar (paper plane) -->
                                        <svg id="send-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg>
                                    </button>
                                </div>
@@ -83,6 +75,12 @@
         let isStreaming = false;
         let partialBotDiv = null;
 
+        const thinkingToast = document.createElement('div');
+        thinkingToast.id = 'thinking-toast';
+        thinkingToast.className = 'hidden fixed inset-0 flex items-center justify-center pointer-events-none z-50';
+        thinkingToast.innerHTML = '<div class="bg-black/80 text-white px-5 py-3 rounded-lg text-lg">Pensando...</div>';
+        document.body.appendChild(thinkingToast);
+
         function setStreaming(on){
             isStreaming = on;
             inputEl.disabled = on;
@@ -90,12 +88,13 @@
             if(on){
                 statusDiv.textContent = 'Assistente respondendo...';
                 inputEl.classList.add('opacity-60');
-                // show spinner + text
-                sendBtn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg><span>Respondendo...</span>`;
+                sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2a10 10 0 100 20 10 10 0 000-20zm5.657 14.657A8 8 0 016.343 6.343L17.657 17.657zM6.343 6.343A8 8 0 0117.657 17.657L6.343 6.343z" clip-rule="evenodd"/></svg>';
+                thinkingToast.classList.remove('hidden');
             } else {
                 statusDiv.textContent = 'Pronto';
                 inputEl.classList.remove('opacity-60');
                 sendBtn.innerHTML = originalSendHTML;
+                thinkingToast.classList.add('hidden');
             }
         }
 
@@ -107,19 +106,16 @@
             const msg = inputEl.value.trim();
             if (!msg || isStreaming) return;
             appendMessage(msg, 'user');
-            // ocultar estado vazio quando houver mensagens
             const empty = document.getElementById('empty-state'); if(empty) empty.style.display = 'none';
             socket.emit('message', msg);
             inputEl.value = '';
             inputEl.style.height = 'auto';
 
-            // bloquear input até 'stream_end'
             setStreaming(true);
             const empty2 = document.getElementById('empty-state'); if(empty2) empty2.style.display = 'none';
             partialBotDiv = appendMessage('', 'bot');
         });
 
-        // Send on Enter, Shift+Enter for newline
         inputEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -127,7 +123,6 @@
             }
         });
 
-        // auto-resize textarea
         inputEl.addEventListener('input', () => {
             inputEl.style.height = 'auto';
             inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
@@ -136,13 +131,11 @@
         socket.on('message', function(msg){
             if (typeof msg !== 'string') msg = JSON.stringify(msg);
 
-            // messages that start with a newline are special (tool_call)
             if (msg.startsWith('\n')){
                 appendMessage(msg.trim(), 'bot');
                 return;
             }
 
-            // append incrementally
             if (partialBotDiv) {
                 partialBotDiv.textContent += msg;
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -151,29 +144,24 @@
             }
         });
 
-        // stream end
         socket.on('stream_end', function(){
             partialBotDiv = null;
             setStreaming(false);
-            // garantir scroll final quando stream terminar
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         });
 
-        // scroll ao focar (útil em mobile quando o teclado abre)
         inputEl.addEventListener('focus', () => {
             setTimeout(() => { messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 250);
             adjustMessagesPadding();
         });
 
-        // rolagem sempre que a janela muda de tamanho (teclado virtual abrindo/fechando)
         window.addEventListener('resize', () => { adjustMessagesPadding(); messagesDiv.scrollTop = messagesDiv.scrollHeight; });
 
-        // ajustar padding-bottom do container de mensagens para caber a barra de input fixa
         function adjustMessagesPadding(){
             const inputBar = document.getElementById('input-bar');
             if(!inputBar) return;
             const rect = inputBar.getBoundingClientRect();
-            const pb = Math.max(rect.height + 8, 80); // mínimo
+            const pb = Math.max(rect.height + 8, 80); 
             messagesDiv.style.paddingBottom = pb + 'px';
         }
 
@@ -197,17 +185,15 @@
             container.appendChild(meta);
             wrapper.appendChild(container);
             messagesDiv.appendChild(wrapper);
-            // scroll para a mensagem recém adicionada (centraliza no mobile)
             wrapper.scrollIntoView({behavior: 'smooth', block: 'center'});
             return bubble;
         }
 
-        // Action menu: toggle and handlers for Valorant/Leave
         const actionBtn = document.getElementById('action-btn');
         const actionMenu = document.getElementById('action-menu');
-    const activateBtn = document.getElementById('activate-valorant');
-    const leaveBtn = document.getElementById('leave-valorant');
-    const professorGoneBtn = document.getElementById('professor-gone');
+        const activateBtn = document.getElementById('activate-valorant');
+        const leaveBtn = document.getElementById('leave-valorant');
+        const professorGoneBtn = document.getElementById('professor-gone');
 
         actionBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -215,17 +201,13 @@
             if (isHidden) actionMenu.classList.remove('hidden'); else actionMenu.classList.add('hidden');
         });
 
-        // close menu on outside click
         document.addEventListener('click', () => { actionMenu.classList.add('hidden'); });
 
         activateBtn.addEventListener('click', (e) => {
             e.preventDefault();
             actionMenu.classList.add('hidden');
-            // Emit the command 'Valorant' to the server
             socket.emit('message', 'Valorant');
-            // show a small confirmation bubble locally as user action
             appendMessage('Ativando Valorant...', 'user');
-            // ensure client unblocks quickly if server handles locally (server emits stream_end)
             setStreaming(true);
         });
 
@@ -240,7 +222,6 @@
         professorGoneBtn.addEventListener('click', (e) => {
             e.preventDefault();
             actionMenu.classList.add('hidden');
-            // envia a frase exata que desativa o modo Professor no servidor
             socket.emit('message', 'O Professor foi embora');
             appendMessage('O Professor foi embora', 'user');
             setStreaming(true);
