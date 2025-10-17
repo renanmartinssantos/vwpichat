@@ -142,4 +142,10 @@ def handle_message(msg):
 
 if __name__ == '__main__':
     # porta 5000 por padrão
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+        allow_unsafe = os.getenv('ALLOW_UNSAFE_WERKZEUG') in ('1', 'true', 'yes')
+        if allow_unsafe:
+            print('Warning: running Werkzeug in an unsafe mode (ALLOW_UNSAFE_WERKZEUG=1). Use only for development or controlled environments.')
+            socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+        else:
+            print('To allow Werkzeug anyway set ALLOW_UNSAFE_WERKZEUG=1, or use a production server (eventlet/gevent).')
+            socketio.run(app, host='0.0.0.0', port=5000, debug=True)
